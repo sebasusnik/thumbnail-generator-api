@@ -19,12 +19,11 @@ type Thumbnail = {
     width: number;
     height: number;
   };
-  fileSize: number
   url: string;
 };
 
 type EventDetail = {
-  originalImageUrl: string;
+  originalUrl: string;
   thumbnails: Thumbnail[];
   metadata: Metadata;
 };
@@ -53,7 +52,7 @@ async function getImageBuffer(fileUrl: string) {
 
 // Helper function to resize the image buffer for a given size
 async function resizeImageBuffer(imageBuffer: Buffer, width: number, height: number) {
-  console.log(`Resizing image for size: ${JSON.stringify({width, height})}`);
+  console.log(`Resizing image for size: ${JSON.stringify({ width, height })}`);
   const resizedBuffer = await sharp(imageBuffer)
     .resize(width, height)
     .toBuffer();
@@ -64,7 +63,7 @@ async function resizeImageBuffer(imageBuffer: Buffer, width: number, height: num
 // Helper function to upload the resized buffer to S3
 async function uploadResizedBuffer(resizedBuffer: Buffer, metadata: Metadata, width: number, height: number) {
   if (!BUCKET_NAME) throw new Error('BUCKET_NAME environment variable is not defined');
-  
+
   // Use the width and height properties to create the new file name
   const newFileName = `${metadata.filename}-${width}x${height}.${metadata.type.split('/')[1]}`;
 
@@ -86,12 +85,12 @@ async function uploadResizedBuffer(resizedBuffer: Buffer, metadata: Metadata, wi
 // Helper function to create the event detail object
 function createEventDetail(fileUrl: string, metadata: Metadata, thumbnails: Thumbnail[]) {
   const eventDetail: EventDetail = {
-    originalImageUrl: fileUrl,
+    originalUrl: fileUrl,
     thumbnails,
     metadata
   };
 
-  console.log("Event envs:", {eventSource: process.env.EVENT_SOURCE, eventDetailType: process.env.EVENT_DETAIL_TYPE})
+  console.log("Event envs:", { eventSource: process.env.EVENT_SOURCE, eventDetailType: process.env.EVENT_DETAIL_TYPE })
 
   console.log(`Created event detail object for thumbnailsGenerated event: ${JSON.stringify(eventDetail)}`);
 
@@ -121,10 +120,9 @@ async function generateThumbnails(fileUrl: string, metadata: Metadata) {
   // Get the image buffer from the file URL
   const imageBuffer = await getImageBuffer(fileUrl);
 
-  const thumbnails = [];
 
-  // Use a for...of loop to iterate over image dimensions
-  for (const {width, height} of IMAGE_DIMENSIONS) {
+  // Use Promise.all to perform the three resizes at once
+  const thumbnails = await Promise.all(IMAGE_DIMENSIONS.map(async ({ width, height }) => {
 
     // Resize the image buffer for a given size
     const resizedBuffer = await resizeImageBuffer(imageBuffer, width, height);
@@ -132,12 +130,12 @@ async function generateThumbnails(fileUrl: string, metadata: Metadata) {
     // Upload the resized buffer to S3 and get the URL
     const url = await uploadResizedBuffer(resizedBuffer, metadata, width, height);
 
-    thumbnails.push({
-      size: {width, height},
-      fileSize: resizedBuffer.byteLength,
+    return {
+      size: { width, height },
       url
-    });
-  }
+    };
+
+  }));
 
   console.log(`Generated ${thumbnails.length} thumbnails`);
 
@@ -146,21 +144,24 @@ async function generateThumbnails(fileUrl: string, metadata: Metadata) {
 
 export async function handler(event: Event) {
   try {
-    const {fileUrl, metadata} = event.detail;
+    const { fileUrl, metadata } = event.detail;
 
     console.log(`Received event detail: ${JSON.stringify(event.detail)}`);
 
+    // Generate the thumbnails
     const thumbnails = await generateThumbnails(fileUrl, metadata);
 
+    // Create the event detail object
     const eventDetail = createEventDetail(fileUrl, metadata, thumbnails);
 
+    // Emit the event to EventBridge
     await emitEvent(eventDetail);
 
     return { statusCode: 200, body: 'Thumbnails generated successfully' };
-    
+
   } catch (error) {
     console.error(error);
-    
+
     return { statusCode: 500, body: 'Something went wrong' };
   }
 };

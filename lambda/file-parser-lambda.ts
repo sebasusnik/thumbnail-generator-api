@@ -90,15 +90,32 @@ async function processUploadRequest(
     };
   }
 
-  console.log("Uploading file...");
+  try {
 
-  const { response, key } = await uploadFile(file);
+    console.log("Uploading file...");
+    const { response, key } = await uploadFile(file);
 
-  console.log("Publishing event...");
+    console.log("Publishing event...");
+    const data = await publishEvent(key, file);
 
-  const data = await publishEvent(key, file);
+    console.log("Event data:", data);
 
-  console.log("Event data:", data);
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        message: "Image uploaded successfully. It will be processed in the background and an event will be emitted when done."
+      })
+    };
+  } catch (error) {
+    // Handle any errors that may occur during the upload or publish process
+    console.error("Image upload failed:", error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        message: `Image upload failed: ${(error as Error).message}`
+      })
+    };
+  }
 }
 
 export const handler = async (event: APIGatewayProxyEvent) =>

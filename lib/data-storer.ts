@@ -24,6 +24,7 @@ export class DataStorer extends Construct {
       handler: 'handler',
       environment: {
         TABLE_NAME: dataTable.tableName,
+        REGION: process.env.CDK_DEFAULT_REGION || 'us-east-1',
       },
     });
 
