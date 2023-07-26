@@ -55,7 +55,7 @@ async function publishEvent(key: string, file: File) {
       fileUrl,
       metadata: {
         fileSize: file.content.byteLength,
-        type: file.type,
+        type: file.contentType,
         filename: file.filename.split('.')[0],
       },
     }),

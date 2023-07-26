@@ -13,7 +13,7 @@ import { ResponseSender } from './response-sender';
 // Define an enum for the event source
 export enum EventSource {
   LAMBDA_A = 'FileParser',
-  LAMBDA_B = 'ThumbnailGenerator',
+  LAMBDA_B = 'ImageResizer',
 }
 
 // Define an enum for the event detail type
@@ -57,7 +57,7 @@ export class ThumbnailGeneratorApiStack extends cdk.Stack {
     // Create a thumbnail generator construct
     const thumbnailGenerator = new ThumbnailGenerator(this, 'ThumbnailGenerator', {
       eventBus: eventBus,
-      inputRule: imageUploadedRule,
+      rule: imageUploadedRule,
       bucket: fileUploader.bucket,
       eventSource: EventSource.LAMBDA_B,
       eventDetailType: EventDetailType.THUMBNAILS_GENERATED,

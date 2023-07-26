@@ -1,133 +1,131 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-// Import the SQS client and the SendMessageCommand
-import { SQS, SendMessageCommand } from '@aws-sdk/client-sqs';
-import sharp from 'sharp';
 import axios from 'axios';
-import { v4 as uuidv4 } from "uuid";
+import sharp from 'sharp';
+import { S3 } from 'aws-sdk';
+import { EventBridge } from 'aws-sdk';
 
-const s3 = new S3Client({});
-const sqs = new SQS({});
+type ImageDimensions = {
+  width: number;
+  height: number;
+};
 
-interface EventDetail {
-  fileUrl: string;
+type Metadata = {
+  fileSize: number;
+  type: "image/jpeg" | "image/png";
+  filename: string;
+};
+
+type Thumbnail = {
+  size: {
+    width: number;
+    height: number;
+  };
+  url: string;
+};
+
+type EventDetail = {
+  originalUrl: string;
+  thumbnails: Thumbnail[];
   metadata: Metadata;
-}
-
-export interface Metadata {
-  size: string,
-  type: string,
-  filename: string,
 };
 
 interface Event {
-  detail: EventDetail;
+  detail: {
+    fileUrl: string;
+    metadata: Metadata;
+  };
 }
 
-type SqsMessageParams = {
-  QueueUrl: string;
-  MessageBody: string;
-  DelaySeconds?: number;
-  MessageAttributes?: {
-    [key: string]: {
-      DataType: string;
-      StringValue?: string;
-      BinaryValue?: Uint8Array;
-    };
-  };
-  MessageDeduplicationId?: string;
-  MessageGroupId?: string;
+// Use an array instead of an object to store image dimensions
+const IMAGE_DIMENSIONS: ImageDimensions[] = JSON.parse(process.env.IMAGE_DIMENSIONS || "");
+
+const BUCKET_NAME = process.env.BUCKET_NAME;
+
+const eventBridge = new EventBridge({ region: process.env.REGION });
+
+const generateThumbnails = async (fileUrl: string, metadata: Metadata) => {
+
+  if (!BUCKET_NAME) throw new Error('BUCKET_NAME environment variable is not defined');
+
+  console.log(`Generating thumbnails for fileUrl: ${fileUrl} and metadata: ${JSON.stringify(metadata)}`);
+
+  const response = await axios.get(fileUrl, { responseType: 'arraybuffer' });
+  const imageBuffer = Buffer.from(response.data, 'binary');
+
+  console.log(`Image buffer size: ${imageBuffer.length} bytes`);
+
+  const thumbnails = [];
+
+  // Use a for...of loop to iterate over image dimensions
+  for (const {width, height} of IMAGE_DIMENSIONS) {
+
+    console.log(`Resizing image for size: ${JSON.stringify({width, height})}`);
+
+    const resizedBuffer = await sharp(imageBuffer)
+      .resize(width, height)
+      .toBuffer();
+
+    console.log(`Resized buffer size for size: ${resizedBuffer.length} bytes`);
+
+    // Use the width and height properties to create the new file name
+    const newFileName = `${metadata.filename}-${width}x${height}.${metadata.type.split('/')[1]}`;
+
+    console.log(`New file name for size: ${newFileName}`);
+
+    const s3 = new S3();
+    await s3.putObject({
+      Bucket: BUCKET_NAME,
+      Key: newFileName,
+      Body: resizedBuffer,
+      ContentType: metadata.type,
+    }).promise();
+
+    console.log(`Uploaded resized buffer for size to bucket ${BUCKET_NAME}`);
+
+    thumbnails.push({
+      size: {width, height},
+      url: `https://s3.amazonaws.com/${BUCKET_NAME}/${newFileName}`
+    });
+  }
+
+  console.log(`Generated ${thumbnails.length} thumbnails`);
+
+  return thumbnails;
 };
 
-async function getImageBuffer(fileUrl: string) {
-  const response = await axios.get(fileUrl, { responseType: 'arraybuffer' });
-  const imageBuffer = response.data;
-  console.log(["Axios Response:", { response, imageBuffer}])
-  return imageBuffer;
-}
-
-async function resizeImage(imageBuffer: Buffer, width: number, height: number) {
-  const resizedImageBuffer = await sharp(imageBuffer)
-    .resize(width, height, { fit: 'cover' }) 
-    .toFormat('jpeg')
-    .toBuffer();
-  console.log(resizedImageBuffer)
-  return resizedImageBuffer;
-}
-
-async function uploadImage(bucketName: string, resizedImageKey: string, resizedImageBuffer: Buffer) {
+export const handler = async (event: Event) => {
   try {
-    await s3.send(new PutObjectCommand({
-      Bucket: bucketName,
-      Key: resizedImageKey,
-      Body: resizedImageBuffer,
-      ContentType: 'image/jpeg',
-    }));
-    console.log("Successfully uploaded image to S3");
+    const {fileUrl, metadata} = event.detail;
+
+    console.log(`Received event detail: ${JSON.stringify(event.detail)}`);
+
+    const thumbnails = await generateThumbnails(fileUrl, metadata);
+
+    const eventDetail: EventDetail = {
+      originalUrl: fileUrl,
+      thumbnails,
+      metadata
+    };
+
+    console.log("Event envs:", {eventSource: process.env.EVENT_SOURCE, eventDetailType: process.env.EVENT_DETAIL_TYPE})
+
+    console.log(`Created event detail object for thumbnailsGenerated event: ${JSON.stringify(eventDetail)}`);
+
+    await eventBridge.putEvents({
+      Entries: [{
+        Source: process.env.EVENT_SOURCE,
+        DetailType: process.env.EVENT_DETAIL_TYPE,
+        Detail: JSON.stringify(eventDetail),
+        EventBusName: process.env.EVENT_BUS_NAME
+      }]
+    }).promise();
+    
+    console.log(`Sent event to EventBridge with source ${process.env.EVENT_SOURCE} and detail-type ${process.env.EVENT_DETAIL_TYPE}`);
+
+    return { statusCode: 200, body: 'Thumbnails generated successfully' };
+    
   } catch (error) {
     console.error(error);
-    throw error;
+    
+    return { statusCode: 500, body: 'Something went wrong' };
   }
-}
-
-function getImageUrl(bucketName: string, resizedImageKey: string) {
-  const resizedImageUrl = `https://${bucketName}.s3.amazonaws.com/${resizedImageKey}`;
-  return resizedImageUrl;
-}
-
-function createMessage(width: number, height: number, queueUrl: string, messageGroupId: string, fileUrl: string, resizedImageUrl: string, metadata: Metadata) {
-
-  const params: SqsMessageParams = {
-    MessageBody: JSON.stringify({
-      original: fileUrl,
-      url: resizedImageUrl,
-      size: {
-        width,
-        height
-      },
-      metadata: metadata
-    }),
-    MessageDeduplicationId: metadata.filename,  // Required for FIFO queues
-    MessageGroupId: messageGroupId,  // Required for FIFO queues
-    QueueUrl: queueUrl // Use the queue URL from the environment variable
-  };
-  console.log("SQS Message Params", {params})
-  return params;
-}
-
-async function sendMessage(sqs: SQS, params: SqsMessageParams) {
-  const data = await sqs.send(new SendMessageCommand(params));
-  console.log("Successfully sent message to SQS queue", data);
-}
-
-async function coreLogic(event: Event) {
-
-  const { fileUrl, metadata } = event.detail;
-
-  const bucketName = process.env.BUCKET_NAME || "";
-  const width = parseInt(process.env.WIDTH || "");
-  const height = parseInt(process.env.HEIGHT || "");
-  const queueUrl = process.env.QUEUE_URL || "";
-  const messageGroupId = process.env.MESSAGE_GROUP || "";
-
-  console.log({envs: {bucketName, width, height, queueUrl, messageGroupId}})
-
-  const resizedImageId = `${width}x${height}-${uuidv4()}`;
-  console.log(resizedImageId)
-
-  const resizedImageKey = `resized/${resizedImageId}.jpg`;
-  console.log(resizedImageKey)
-
-  const imageBuffer = await getImageBuffer(fileUrl);
-  const resizedImageBuffer = await resizeImage(imageBuffer, width, height);
-
-  await uploadImage(bucketName, resizedImageKey, resizedImageBuffer);
-
-  const resizedImageUrl = getImageUrl(bucketName, resizedImageKey);
-  const messageParams = createMessage(width, height, queueUrl, messageGroupId, fileUrl, resizedImageUrl, metadata);
-
-  await sendMessage(sqs, messageParams);
-}
-
-export const handler = async (event: Event) => {
-    await coreLogic(event);
 };
