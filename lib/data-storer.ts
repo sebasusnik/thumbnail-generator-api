@@ -5,6 +5,7 @@ import {
   aws_lambda_nodejs as lambda,
   aws_dynamodb as dynamodb
 } from 'aws-cdk-lib';
+import { Runtime } from 'aws-cdk-lib/aws-lambda';
 
 export interface DataStorerProps {
   rule: events.Rule;
@@ -26,6 +27,11 @@ export class DataStorer extends Construct {
         TABLE_NAME: dataTable.tableName,
         REGION: process.env.CDK_DEFAULT_REGION || 'us-east-1',
       },
+      bundling: {
+        minify: true,
+        target: 'node18',
+      },
+      runtime: Runtime.NODEJS_18_X,
     });
 
     dataTable.grantWriteData(dataStorer);

@@ -1,14 +1,14 @@
 import { Construct } from 'constructs';
-import { 
+import {
   aws_events as events,
   aws_events_targets as targets,
-  aws_apigateway as apigw,
-  aws_lambda_nodejs as lambda
+  aws_lambda_nodejs as lambda,
+  Duration
 } from 'aws-cdk-lib';
+import { Runtime } from 'aws-cdk-lib/aws-lambda';
 
 export interface ResponseSenderProps {
   rule: events.Rule;
-  api: apigw.RestApi;
 }
 
 export class ResponseSender extends Construct {
@@ -18,9 +18,12 @@ export class ResponseSender extends Construct {
     const responseSender = new lambda.NodejsFunction(this, 'ResponseSender', {
       entry: 'lambda/response-sender-lambda.ts',
       handler: 'handler',
-      environment: {
-        API_URL: props.api.url,
+      bundling: {
+        minify: true,
+        target: 'node18',
       },
+      runtime: Runtime.NODEJS_18_X,
+      memorySize: 256,
     });
 
     props.rule.addTarget(new targets.LambdaFunction(responseSender));

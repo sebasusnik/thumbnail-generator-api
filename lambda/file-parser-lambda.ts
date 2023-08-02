@@ -1,5 +1,5 @@
-import { EventBridgeClient, PutEventsCommand } from "@aws-sdk/client-eventbridge";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { EventBridgeClient, PutEventsCommand, PutEventsResponse } from "@aws-sdk/client-eventbridge";
+import { S3Client, PutObjectCommand, PutObjectOutput } from "@aws-sdk/client-s3";
 import { parse } from "aws-multipart-parser";
 import { APIGatewayProxyEvent } from "aws-lambda";
 import { v4 as uuidv4 } from "uuid";
@@ -32,7 +32,7 @@ function validateFile(file: File) {
   }
 }
 
-async function uploadFile(file: File) {
+async function uploadFile(file: File): Promise<{ response: PutObjectOutput, key: string }> {
   const key = `${uuidv4()}-${file.filename}`;
   const command = new PutObjectCommand({
     Body: file.content,
@@ -46,18 +46,20 @@ async function uploadFile(file: File) {
   return { response, key };
 }
 
-async function publishEvent(key: string, file: File) {
+async function publishEvent(key: string, file: File, callbackUrl: string): Promise<PutEventsResponse> {
   const fileUrl = `https://${process.env.BUCKET_NAME}.s3.amazonaws.com/${key}`;
+  console.log(`File URL: ${JSON.stringify(fileUrl)}`)
   const event = {
     DetailType: process.env.EVENT_DETAIL_TYPE,
     Source: process.env.EVENT_SOURCE,
     Detail: JSON.stringify({
+      callbackUrl,
       fileUrl,
       metadata: {
         fileSize: file.content.byteLength,
         type: file.contentType,
         filename: file.filename.split('.')[0],
-      },
+      }
     }),
     EventBusName: process.env.EVENT_BUS_NAME,
   };
@@ -67,15 +69,25 @@ async function publishEvent(key: string, file: File) {
 }
 
 async function processUploadRequest(
-  event: APIGatewayProxyEvent
-) {
+event: APIGatewayProxyEvent
+): Promise<{ statusCode: number, body: string, headers?: { [key: string]: string | boolean } }> {
 
   console.log("Input event:", event);
 
   const formData = parse(event, event.isBase64Encoded);
+
+  console.log("Form data:", formData)
+  
   const file = formData.file as File;
 
   console.log("File data:", file);
+
+  const metaData = {
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "*"
+    },
+  };
 
   try {
     validateFile(file);
@@ -83,6 +95,7 @@ async function processUploadRequest(
 
     console.error("File validation failed:", error);
     return {
+      ...metaData,
       statusCode: 400,
       body: JSON.stringify({
         message: `File validation failed: ${(error as Error).message}`
@@ -91,26 +104,31 @@ async function processUploadRequest(
   }
 
   try {
+    const callbackUrl = event.headers["X-Callback-URL".toLowerCase()];
+    if (!callbackUrl) {
+      throw new Error("Missing X-Callback-URL header");
+    }
 
     console.log("Uploading file...");
     const { response, key } = await uploadFile(file);
 
     console.log("Publishing event...");
-    const data = await publishEvent(key, file);
+    const data = await publishEvent(key, file, callbackUrl);
 
     console.log("Event data:", data);
 
     return {
+      ...metaData,
       statusCode: 200,
       body: JSON.stringify({
         message: "Image uploaded successfully. It will be processed in the background and an event will be emitted when done."
       })
     };
   } catch (error) {
-    // Handle any errors that may occur during the upload or publish process
     console.error("Image upload failed:", error);
     return {
-      statusCode: 500,
+      ...metaData,
+      statusCode: (error as Error).message === "Missing callbackUrl header" ? 400 : 500,
       body: JSON.stringify({
         message: `Image upload failed: ${(error as Error).message}`
       })

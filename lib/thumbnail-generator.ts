@@ -58,19 +58,18 @@ export class ThumbnailGenerator extends Construct {
       bundling: {
         forceDockerBundling: true,
         nodeModules: ['sharp', 'axios'],
+        minify: true,
+        target: 'node18',
       },
       runtime: Runtime.NODEJS_18_X,
-      memorySize: 256,
+      memorySize: 512,
       timeout: Duration.seconds(10),
     });
 
-    // Grant read/write permissions to the bucket
     props.bucket.grantReadWrite(imageResizer);
 
-    // Add the lambda function as a target for the input rule
     props.rule.addTarget(new targets.LambdaFunction(imageResizer));
 
-    // Add permissions for the Node.js function to emit events to the default event bus
     props.eventBus.grantPutEventsTo(imageResizer);
   }
 }

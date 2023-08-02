@@ -71,7 +71,6 @@ export class ThumbnailGeneratorApiStack extends cdk.Stack {
     // Create a response sender construct
     const responseSender = new ResponseSender(this, 'ResponseSender', {
       rule: thumbnailsGeneratedRule,
-      api: fileUploader.api,
     });
   }
 }
