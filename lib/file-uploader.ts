@@ -87,12 +87,11 @@ export class FileUploader extends Construct {
 
     const uploadResource = this.api.root.addResource('upload');
     uploadResource.addMethod('POST', new apigw.LambdaIntegration(fileParser), {
-      apiKeyRequired: true // Enable the API key requirement for the endpoint
+      apiKeyRequired: true
     });
 
-    // Output the API key value and the API URL as stack outputs
     new CfnOutput(this, 'ApiArnOutput', {
-      value: this.apiKey.keyArn, // Use keyValue instead of attrKeyValue
+      value: this.apiKey.keyArn,
       description: 'The API key value for file service'
     });
   }

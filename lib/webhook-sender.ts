@@ -3,7 +3,6 @@ import {
   aws_events as events,
   aws_events_targets as targets,
   aws_lambda_nodejs as lambda,
-  Duration
 } from 'aws-cdk-lib';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
 
@@ -11,12 +10,12 @@ export interface ResponseSenderProps {
   rule: events.Rule;
 }
 
-export class ResponseSender extends Construct {
+export class WebhookSender extends Construct {
   constructor(scope: Construct, id: string, props: ResponseSenderProps) {
     super(scope, id);
 
-    const responseSender = new lambda.NodejsFunction(this, 'ResponseSender', {
-      entry: 'lambda/response-sender-lambda.ts',
+    const webhookSender = new lambda.NodejsFunction(this, 'WebhookSender', {
+      entry: 'lambda/webhook-sender-lambda.ts',
       handler: 'handler',
       bundling: {
         minify: true,
@@ -26,6 +25,6 @@ export class ResponseSender extends Construct {
       memorySize: 256,
     });
 
-    props.rule.addTarget(new targets.LambdaFunction(responseSender));
+    props.rule.addTarget(new targets.LambdaFunction(webhookSender));
   }
 }

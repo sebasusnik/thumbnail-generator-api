@@ -12,10 +12,12 @@ export interface DataStorerProps {
 }
 
 export class DataStorer extends Construct {
+  public readonly dataTable: dynamodb.Table;
+
   constructor(scope: Construct, id: string, props: DataStorerProps) {
     super(scope, id);
 
-    const dataTable = new dynamodb.Table(this, 'DataTable', {
+    this.dataTable = new dynamodb.Table(this, 'DataTable', {
       partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'size', type: dynamodb.AttributeType.STRING },
     });
@@ -24,7 +26,7 @@ export class DataStorer extends Construct {
       entry: 'lambda/data-storer-lambda.ts',
       handler: 'handler',
       environment: {
-        TABLE_NAME: dataTable.tableName,
+        TABLE_NAME: this.dataTable.tableName,
         REGION: process.env.CDK_DEFAULT_REGION || 'us-east-1',
       },
       bundling: {
@@ -34,7 +36,7 @@ export class DataStorer extends Construct {
       runtime: Runtime.NODEJS_18_X,
     });
 
-    dataTable.grantWriteData(dataStorer);
+    this.dataTable.grantWriteData(dataStorer);
     const dataStorerTarget = new targets.LambdaFunction(dataStorer);
     props.rule.addTarget(dataStorerTarget);
   }

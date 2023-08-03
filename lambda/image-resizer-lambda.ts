@@ -24,19 +24,21 @@ type Thumbnail = {
 };
 
 type InputEventDetail = {
+  ID: string;
   fileUrl: string;
   metadata: Metadata;
-  callbackUrl: string; 
+  callbackUrl: string;
 };
 
 type OutputEventDetail = {
+  ID: string;
   originalImageUrl: string;
   thumbnails: Thumbnail[];
   metadata: Metadata;
-  callbackUrl: string; 
+  callbackUrl: string;
 };
 
-interface Event extends EventBridgeEvent<string, InputEventDetail> {}
+interface Event extends EventBridgeEvent<string, InputEventDetail> { }
 
 const IMAGE_DIMENSIONS: ImageDimensions[] = JSON.parse(process.env.IMAGE_DIMENSIONS || "");
 
@@ -44,22 +46,22 @@ const BUCKET_NAME = process.env.BUCKET_NAME;
 
 const eventBridge = new EventBridge({ region: process.env.REGION });
 
-async function getImageBuffer(fileUrl: string): Promise<Buffer> { 
+async function getImageBuffer(fileUrl: string): Promise<Buffer> {
   const response = await axios.get(fileUrl, { responseType: 'arraybuffer' });
   const imageBuffer = Buffer.from(response.data, 'binary');
   console.log(`Image buffer size: ${imageBuffer.length} bytes`);
   return imageBuffer;
 }
 
-async function resizeImageBuffer(imageBuffer: Buffer, width: number, height: number): Promise<Buffer> { 
+async function resizeImageBuffer(imageBuffer: Buffer, width: number, height: number): Promise<Buffer> {
   const resizedBuffer = await sharp(imageBuffer)
     .resize(width, height)
     .toBuffer();
-  console.log(`Resized buffer size for size: ${resizedBuffer.length} bytes`);
+  console.log(`Resized buffer size: ${resizedBuffer.length} bytes`);
   return resizedBuffer;
 }
 
-async function uploadResizedBuffer(resizedBuffer: Buffer, metadata: Metadata, width: number, height: number): Promise<string> { 
+async function uploadResizedBuffer(resizedBuffer: Buffer, metadata: Metadata, width: number, height: number): Promise<string> {
   if (!BUCKET_NAME) throw new Error('BUCKET_NAME environment variable is not defined');
 
   const newFileName = `${metadata.filename}-${width}x${height}.${metadata.type.split('/')[1]}`;
@@ -69,7 +71,7 @@ async function uploadResizedBuffer(resizedBuffer: Buffer, metadata: Metadata, wi
   console.log("Uploading file...");
 
   const s3 = new S3();
-  const putObjectOutput: S3.PutObjectOutput = await s3.putObject({ 
+  const putObjectOutput: S3.PutObjectOutput = await s3.putObject({
     Bucket: BUCKET_NAME,
     Key: newFileName,
     Body: resizedBuffer,
@@ -81,12 +83,13 @@ async function uploadResizedBuffer(resizedBuffer: Buffer, metadata: Metadata, wi
   return `https://s3.amazonaws.com/${BUCKET_NAME}/${newFileName}`;
 }
 
-function createEventDetail(fileUrl: string, metadata: Metadata, thumbnails: Thumbnail[], callbackUrl: string): OutputEventDetail { 
+function createEventDetail(ID: string, fileUrl: string, metadata: Metadata, thumbnails: Thumbnail[], callbackUrl: string): OutputEventDetail {
   const eventDetail: OutputEventDetail = {
+    ID,
     originalImageUrl: fileUrl,
     thumbnails,
     metadata,
-    callbackUrl 
+    callbackUrl
   };
 
   console.log(`Event detail for thumbnailsGenerated: ${JSON.stringify(eventDetail)}`);
@@ -94,10 +97,10 @@ function createEventDetail(fileUrl: string, metadata: Metadata, thumbnails: Thum
   return eventDetail;
 }
 
-async function publishEvent(eventDetail: OutputEventDetail): Promise<EventBridge.PutEventsResponse> { 
+async function publishEvent(eventDetail: OutputEventDetail): Promise<EventBridge.PutEventsResponse> {
 
   console.log("Publishing event...");
-  const putEventsResponse : EventBridge.PutEventsResponse = await eventBridge.putEvents({ 
+  const putEventsResponse: EventBridge.PutEventsResponse = await eventBridge.putEvents({
     Entries: [{
       Source: process.env.EVENT_SOURCE,
       DetailType: process.env.EVENT_DETAIL_TYPE,
@@ -106,16 +109,16 @@ async function publishEvent(eventDetail: OutputEventDetail): Promise<EventBridge
     }]
   }).promise();
 
-  return putEventsResponse; 
+  return putEventsResponse;
 }
 
-async function generateThumbnails(fileUrl: string, metadata: Metadata): Promise<Thumbnail[]> { 
+async function generateThumbnails(fileUrl: string, metadata: Metadata): Promise<Thumbnail[]> {
 
   const imageBuffer = await getImageBuffer(fileUrl);
 
   const thumbnails = [];
 
- for (const { width, height } of IMAGE_DIMENSIONS) {
+  for (const { width, height } of IMAGE_DIMENSIONS) {
 
     const resizedBuffer = await resizeImageBuffer(imageBuffer, width, height);
 
@@ -132,13 +135,13 @@ async function generateThumbnails(fileUrl: string, metadata: Metadata): Promise<
   return thumbnails;
 }
 
-export async function handler(event: Event): Promise<{ statusCode: number; body: string }> { 
+export async function handler(event: Event): Promise<{ statusCode: number; body: string }> {
   try {
-    const { fileUrl, metadata, callbackUrl } = event.detail; 
+    const { ID, fileUrl, metadata, callbackUrl } = event.detail;
 
-    const thumbnails = await generateThumbnails(fileUrl, metadata); 
+    const thumbnails = await generateThumbnails(fileUrl, metadata);
 
-    const eventDetail = createEventDetail(fileUrl, metadata, thumbnails, callbackUrl); 
+    const eventDetail = createEventDetail(ID, fileUrl, metadata, thumbnails, callbackUrl);
 
     await publishEvent(eventDetail);
 

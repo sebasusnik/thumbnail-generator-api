@@ -6,6 +6,7 @@ const dynamodb = new DynamoDBClient({ region: process.env.REGION });
 const TABLE_NAME = process.env.TABLE_NAME;
 
 interface Event {
+  ID: string;
   callbackUrl: string;
   originalImageUrl: string;
   thumbnails: {
@@ -40,7 +41,7 @@ async function storeData(data: Event) {
 
   const items: Item[] = data.thumbnails.map(thumbnail => {
 
-    const id = data.metadata.filename;
+    const id = data.ID;
 
     const size = `${thumbnail.size.width}x${thumbnail.size.height}`;
 
@@ -69,7 +70,7 @@ async function storeData(data: Event) {
         fileSize: { N: item.fileSize.toString() },
         originalUrl: { S: item.originalUrl },
         thumbnailUrl: { S: item.thumbnailUrl },
-        originalfileSize: { N: item.originalFileSize.toString() },
+        originalFileSize: { N: item.originalFileSize.toString() },
         type: { S: item.type },
         callbackUrl: { S: item.callbackUrl }
       },

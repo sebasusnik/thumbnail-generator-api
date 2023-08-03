@@ -27,8 +27,22 @@ function validateFile(file: File) {
   if (file.content.byteLength > MAX_FILE_SIZE) {
     throw new Error(`File size exceeds ${MAX_FILE_SIZE / MB} MB`);
   }
+
   if (!Object.values(FileType).includes(file.contentType)) {
     throw new Error(`File type ${file.contentType} is not allowed`);
+  }
+
+  const pngMagicNumber = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const jpegMagicNumber = Buffer.from([0xff, 0xd8, 0xff]);
+
+  const fileMagicNumber = file.content.slice(0, 8);
+
+  if (file.contentType === FileType.PNG && !fileMagicNumber.equals(pngMagicNumber)) {
+    throw new Error("File content does not match PNG format");
+  }
+  
+  if (file.contentType === FileType.JPEG && !fileMagicNumber.slice(0,3).equals(jpegMagicNumber)) {
+    throw new Error("File content does not match JPEG format");
   }
 }
 
@@ -46,13 +60,14 @@ async function uploadFile(file: File): Promise<{ response: PutObjectOutput, key:
   return { response, key };
 }
 
-async function publishEvent(key: string, file: File, callbackUrl: string): Promise<PutEventsResponse> {
+async function publishEvent(key: string, file: File, callbackUrl = ''): Promise<PutEventsResponse> {
   const fileUrl = `https://${process.env.BUCKET_NAME}.s3.amazonaws.com/${key}`;
   console.log(`File URL: ${JSON.stringify(fileUrl)}`)
   const event = {
     DetailType: process.env.EVENT_DETAIL_TYPE,
     Source: process.env.EVENT_SOURCE,
     Detail: JSON.stringify({
+      ID: key.split('.')[0],
       callbackUrl,
       fileUrl,
       metadata: {
@@ -69,15 +84,33 @@ async function publishEvent(key: string, file: File, callbackUrl: string): Promi
 }
 
 async function processUploadRequest(
-event: APIGatewayProxyEvent
+  event: APIGatewayProxyEvent
 ): Promise<{ statusCode: number, body: string, headers?: { [key: string]: string | boolean } }> {
 
   console.log("Input event:", event);
 
+  if (!event.body || !event.headers["content-type"] || !event.headers["content-type"].startsWith("multipart/form-data")) {
+    return {
+      statusCode: 400,
+      body: JSON.stringify({
+        message: "Invalid request body. It should be a multipart form data."
+      })
+    };
+  }
+
   const formData = parse(event, event.isBase64Encoded);
 
   console.log("Form data:", formData)
-  
+
+  if (!formData.file || typeof formData.file !== "object") {
+    return {
+      statusCode: 400,
+      body: JSON.stringify({
+        message: "Missing or invalid file object in the form data."
+      })
+    };
+  }
+
   const file = formData.file as File;
 
   console.log("File data:", file);
@@ -104,10 +137,7 @@ event: APIGatewayProxyEvent
   }
 
   try {
-    const callbackUrl = event.headers["X-Callback-URL".toLowerCase()];
-    if (!callbackUrl) {
-      throw new Error("Missing X-Callback-URL header");
-    }
+    const callbackUrl = event.headers["X-Callback-URL".toLowerCase()] || undefined;
 
     console.log("Uploading file...");
     const { response, key } = await uploadFile(file);
@@ -121,7 +151,12 @@ event: APIGatewayProxyEvent
       ...metaData,
       statusCode: 200,
       body: JSON.stringify({
-        message: "Image uploaded successfully. It will be processed in the background and an event will be emitted when done."
+        message: callbackUrl
+          ?
+          "Image uploaded successfully. It will be processed in the background. A webhook event will be sent after processing is complete."
+          :
+          `Image uploaded successfully. It will be processed in the background. You can query the image with the ID: ${key.split('.')[0]}`,
+        id: key.split('.')[0]
       })
     };
   } catch (error) {

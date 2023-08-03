@@ -3,6 +3,7 @@ import { EventBridgeHandler } from 'aws-lambda';
 import { IncomingMessage } from 'http';
 
 interface EventDetail {
+  ID: string;
   callbackUrl: string;
   originalImageUrl: string;
   thumbnails: Array<{
