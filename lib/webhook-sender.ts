@@ -1,21 +1,22 @@
 import { Construct } from 'constructs';
 import {
-  aws_events as events,
-  aws_events_targets as targets,
   aws_lambda_nodejs as lambda,
+  aws_sns as sns,
+  aws_sns_subscriptions as subscriptions
 } from 'aws-cdk-lib';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
+import path from 'path';
 
-export interface ResponseSenderProps {
-  rule: events.Rule;
+export interface WebhookSenderProps {
+  topic: sns.ITopic;
 }
 
 export class WebhookSender extends Construct {
-  constructor(scope: Construct, id: string, props: ResponseSenderProps) {
+  constructor(scope: Construct, id: string, props: WebhookSenderProps) {
     super(scope, id);
 
     const webhookSender = new lambda.NodejsFunction(this, 'WebhookSender', {
-      entry: 'lambda/webhook-sender-lambda.ts',
+      entry: path.join(__dirname, "../lambda", "webhook-sender-lambda.ts"),
       handler: 'handler',
       bundling: {
         minify: true,
@@ -25,6 +26,12 @@ export class WebhookSender extends Construct {
       memorySize: 256,
     });
 
-    props.rule.addTarget(new targets.LambdaFunction(webhookSender));
+    props.topic.addSubscription(new subscriptions.LambdaSubscription(webhookSender, {
+      filterPolicy: {
+        "callbackUrl": sns.SubscriptionFilter.stringFilter({
+          allowlist: ["https", "http"]
+        })
+      }
+    }));
   }
 }
