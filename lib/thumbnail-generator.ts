@@ -4,12 +4,14 @@ import {
   aws_s3 as s3,
   aws_lambda_nodejs as lambda,
   aws_events_targets as targets,
+  aws_sns as sns,
   Duration
 } from 'aws-cdk-lib';
 
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
 
 import { EventSource, EventDetailType } from './thumbnail-generator-api-stack';
+import path from 'path';
 
 type ImageDimensions = {
   width: number;
@@ -25,6 +27,7 @@ export interface ThumbnailGeneratorProps {
 }
 
 export class ThumbnailGenerator extends Construct {
+  public readonly topic: sns.ITopic
 
   constructor(scope: Construct, id: string, props: ThumbnailGeneratorProps) {
     super(scope, id);
@@ -44,8 +47,12 @@ export class ThumbnailGenerator extends Construct {
       }
     ];
 
-    const imageResizer = new lambda.NodejsFunction(this, 'ImageResizer', {
-      entry: 'lambda/image-resizer-lambda.ts',
+    this.topic = new sns.Topic(this, 'ThumbnailsGeneratedTopic', {
+      displayName: 'Thumbnails Generated Topic',
+    });
+
+    const thumbnailGenerator = new lambda.NodejsFunction(this, 'ThumbnailGenerator', {
+      entry: path.join(__dirname, "../lambda", "thumbnail-generator-lambda.ts"),
       handler: 'handler',
       environment: {
         BUCKET_NAME: props.bucket.bucketName,
@@ -54,6 +61,7 @@ export class ThumbnailGenerator extends Construct {
         EVENT_SOURCE: props.eventSource,
         EVENT_DETAIL_TYPE: props.eventDetailType,
         REGION: process.env.CDK_DEFAULT_REGION || 'us-east-1',
+        TOPIC_ARN: this.topic.topicArn
       },
       bundling: {
         forceDockerBundling: true,
@@ -66,10 +74,12 @@ export class ThumbnailGenerator extends Construct {
       timeout: Duration.seconds(10),
     });
 
-    props.bucket.grantReadWrite(imageResizer);
+    props.bucket.grantReadWrite(thumbnailGenerator);
 
-    props.rule.addTarget(new targets.LambdaFunction(imageResizer));
+    this.topic.grantPublish(thumbnailGenerator)
 
-    props.eventBus.grantPutEventsTo(imageResizer);
+    props.rule.addTarget(new targets.LambdaFunction(thumbnailGenerator));
+
+    props.eventBus.grantPutEventsTo(thumbnailGenerator);
   }
 }

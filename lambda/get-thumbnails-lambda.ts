@@ -100,7 +100,7 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const id = event.queryStringParameters?.id;
 
     if (!id) {
-      throw new Error("Missing id parameter");
+      throw new Error("Missing id query parameter");
     }
 
     console.log("Received id:", id);

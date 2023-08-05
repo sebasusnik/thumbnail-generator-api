@@ -1,5 +1,5 @@
 import * as https from 'https';
-import { EventBridgeHandler } from 'aws-lambda';
+import { SNSEvent, Context } from 'aws-lambda';
 import { IncomingMessage } from 'http';
 
 interface EventDetail {
@@ -23,17 +23,14 @@ interface ReturnValue {
 
 const sendResponse = async (data: EventDetail) => {
 
-  // Add a log to show the data that is being sent
   console.log(`Sending data: ${JSON.stringify(data)}`);
 
   const callbackUrl = data.callbackUrl;
 
-  // Add a log to show the callback URL
   console.log(`Callback URL: ${JSON.stringify(callbackUrl)}`)
 
   const url = new URL(callbackUrl);
 
-  // Add a log to show the callback URL object
   console.log(`Callback URL hostname: ${JSON.stringify(url.hostname)}`)
   console.log(`Callback URL pathname: ${JSON.stringify(url.pathname)}`)
   console.log(`Callback URL port: ${JSON.stringify(url.port)}`)
@@ -56,12 +53,10 @@ const sendResponse = async (data: EventDetail) => {
   const postRequest = new Promise((resolve, reject) => {
     const req = https.request(options, (res: IncomingMessage) => {
 
-      // Add a log to show the status code and headers of the response
       console.log(`Status code: ${res.statusCode}`);
       console.log(`Headers: ${JSON.stringify(res.headers)}`);
 
       res.on('data', (chunk: Buffer | string) => {
-        // Add a log to show the response data
         console.log(`Response: ${chunk}`);
       });
       res.on('end', () => {
@@ -70,7 +65,6 @@ const sendResponse = async (data: EventDetail) => {
     });
 
     req.on('error', (error: Error) => {
-      // Add a log to show the error message and stack trace
       console.error(`Error: ${error.message}`);
       console.error(error.stack);
       reject(error);
@@ -95,9 +89,14 @@ const sendResponse = async (data: EventDetail) => {
   }
 };
 
-export const handler: EventBridgeHandler<'aws.', EventDetail, ReturnValue> = async (event) => {
-  // Add a log to show the event that is received
+export const handler = async (event: SNSEvent, context: Context): Promise<ReturnValue> => {
   console.log(`Received event: ${JSON.stringify(event)}`);
   
-  return await sendResponse(event.detail);
+  let message = event.Records[0].Sns.Message;
+
+  let messageObject = JSON.parse (message);
+
+  console.log (messageObject); 
+  
+  return await sendResponse(messageObject);
 };

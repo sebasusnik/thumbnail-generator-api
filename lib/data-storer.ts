@@ -6,6 +6,7 @@ import {
   aws_dynamodb as dynamodb
 } from 'aws-cdk-lib';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
+import path from 'path';
 
 export interface DataStorerProps {
   rule: events.Rule;
@@ -23,7 +24,7 @@ export class DataStorer extends Construct {
     });
 
     const dataStorer = new lambda.NodejsFunction(this, 'DataStorer', {
-      entry: 'lambda/data-storer-lambda.ts',
+      entry: path.join(__dirname, "../lambda", "data-storer-lambda.ts"),
       handler: 'handler',
       environment: {
         TABLE_NAME: this.dataTable.tableName,

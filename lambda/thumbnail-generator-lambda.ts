@@ -1,7 +1,8 @@
 import axios from 'axios';
 import sharp from 'sharp';
-import { S3, EventBridge } from 'aws-sdk';
+import { S3, EventBridge, SNS } from 'aws-sdk';
 import { EventBridgeEvent } from 'aws-lambda';
+import { MessageAttributeMap } from 'aws-sdk/clients/sns';
 
 type ImageDimensions = {
   width: number;
@@ -44,6 +45,9 @@ const IMAGE_DIMENSIONS: ImageDimensions[] = JSON.parse(process.env.IMAGE_DIMENSI
 
 const BUCKET_NAME = process.env.BUCKET_NAME;
 
+const TOPIC_ARN = process.env.TOPIC_ARN;
+
+const sns = new SNS({ region: process.env.REGION });
 const eventBridge = new EventBridge({ region: process.env.REGION });
 
 async function getImageBuffer(fileUrl: string): Promise<Buffer> {
@@ -83,7 +87,7 @@ async function uploadResizedBuffer(resizedBuffer: Buffer, metadata: Metadata, wi
   return `https://s3.amazonaws.com/${BUCKET_NAME}/${newFileName}`;
 }
 
-function createEventDetail(ID: string, fileUrl: string, metadata: Metadata, thumbnails: Thumbnail[], callbackUrl: string): OutputEventDetail {
+function createEvents(ID: string, fileUrl: string, metadata: Metadata, thumbnails: Thumbnail[], callbackUrl: string): { messageAttribute: MessageAttributeMap, message: string; eventDetail: OutputEventDetail } {
   const eventDetail: OutputEventDetail = {
     ID,
     originalImageUrl: fileUrl,
@@ -94,8 +98,32 @@ function createEventDetail(ID: string, fileUrl: string, metadata: Metadata, thum
 
   console.log(`Event detail for thumbnailsGenerated: ${JSON.stringify(eventDetail)}`);
 
-  return eventDetail;
+  const messageAttribute = {
+    callbackUrl: {
+      DataType: 'String',
+      StringValue: callbackUrl.slice(0, 5)
+    }
+  };
+
+  const message = JSON.stringify(eventDetail);
+
+  console.log(`SNS Message for Webhook Sender: ${message}`);
+
+  return { messageAttribute, message, eventDetail };
 }
+
+
+const publishSNSMessage = async ( messageAttribute: MessageAttributeMap, message: string ) => {
+
+  console.log("Sending SNS Message...", {messageAttribute, message})
+  const messageResponse = sns.publish({
+    TopicArn: TOPIC_ARN,
+    Message: message,
+    MessageAttributes: messageAttribute
+  }).promise();
+
+  return messageResponse;
+};
 
 async function publishEvent(eventDetail: OutputEventDetail): Promise<EventBridge.PutEventsResponse> {
 
@@ -141,7 +169,11 @@ export async function handler(event: Event): Promise<{ statusCode: number; body:
 
     const thumbnails = await generateThumbnails(fileUrl, metadata);
 
-    const eventDetail = createEventDetail(ID, fileUrl, metadata, thumbnails, callbackUrl);
+    const { messageAttribute, message, eventDetail } = createEvents(ID, fileUrl, metadata, thumbnails, callbackUrl);
+
+    const messageResponse = await publishSNSMessage( messageAttribute, message );
+
+    console.log("SNS Message response", messageResponse)
 
     await publishEvent(eventDetail);
 
@@ -150,6 +182,6 @@ export async function handler(event: Event): Promise<{ statusCode: number; body:
   } catch (error) {
     console.error(error);
 
-    return { statusCode: 500, body: 'Something went wrong' };
+    return { statusCode: 500, body: `Something went wrong:${error}` };
   }
 };

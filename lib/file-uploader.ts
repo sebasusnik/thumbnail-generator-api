@@ -63,8 +63,8 @@ export class FileUploader extends Construct {
       }),
     });
 
-    const fileParser = new lambda.NodejsFunction(this, 'FileParser', {
-      entry: path.join(__dirname, "../lambda", "file-parser-lambda.ts"),
+    const fileUploader = new lambda.NodejsFunction(this, 'FileUploader', {
+      entry: path.join(__dirname, "../lambda", "file-uploader-lambda.ts"),
       handler: 'handler',
       environment: {
         EVENT_BUS_NAME: props.eventBus.eventBusName,
@@ -81,17 +81,17 @@ export class FileUploader extends Construct {
       memorySize: 512,
     });
 
-    props.eventBus.grantPutEventsTo(fileParser);
+    props.eventBus.grantPutEventsTo(fileUploader);
 
-    this.bucket.grantReadWrite(fileParser);
+    this.bucket.grantReadWrite(fileUploader);
 
     const uploadResource = this.api.root.addResource('upload');
-    uploadResource.addMethod('POST', new apigw.LambdaIntegration(fileParser), {
+    uploadResource.addMethod('POST', new apigw.LambdaIntegration(fileUploader), {
       apiKeyRequired: true
     });
 
     new CfnOutput(this, 'ApiArnOutput', {
-      value: this.apiKey.keyArn,
+      value: this.apiKey.keyId,
       description: 'The API key value for file service'
     });
   }

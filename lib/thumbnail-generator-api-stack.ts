@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import {
   aws_events as events,
+  aws_sns as sns
 } from 'aws-cdk-lib';
 
 import { FileUploader } from './file-uploader';
@@ -61,7 +62,7 @@ export class ThumbnailGeneratorApiStack extends cdk.Stack {
     });
 
     const webhookSender = new WebhookSender(this, 'WebhookSender', {
-      rule: thumbnailsGeneratedRule,
+      topic: thumbnailGenerator.topic,
     });
 
     const getThumbnails = new GetThumbnails (this, 'GetThumbnails', {

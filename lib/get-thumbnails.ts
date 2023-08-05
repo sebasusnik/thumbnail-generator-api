@@ -6,6 +6,7 @@ import {
 
 import { Runtime } from "aws-cdk-lib/aws-lambda";
 import { Table } from "aws-cdk-lib/aws-dynamodb";
+import path from "path";
 
 export interface GetThumbnailsProps {
   api: apigw.RestApi;
@@ -19,7 +20,7 @@ export class GetThumbnails extends Construct {
     const { api, dataTable } = props;
 
     const getThumbnailsLambda = new lambda.NodejsFunction(this, 'GetThumbnailsLambda', {
-      entry: 'lambda/get-thumbnails-lambda.ts',
+      entry: path.join(__dirname, "../lambda", "get-thumbnails-lambda.ts"),
       handler: 'handler',
       environment: {
         REGION: process.env.CDK_DEFAULT_REGION || 'us-east-1',
@@ -36,7 +37,7 @@ export class GetThumbnails extends Construct {
 
     const getThumbnailsIntegration = new apigw.LambdaIntegration(getThumbnailsLambda);
 
-    const downloadResource = api.root.addResource('download');
+    const downloadResource = api.root.addResource('thumbnails');
     downloadResource.addMethod('GET', getThumbnailsIntegration, {
       apiKeyRequired: true
     })

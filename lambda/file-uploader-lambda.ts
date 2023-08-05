@@ -155,7 +155,7 @@ async function processUploadRequest(
           ?
           "Image uploaded successfully. It will be processed in the background. A webhook event will be sent after processing is complete."
           :
-          `Image uploaded successfully. It will be processed in the background. You can query the image with the ID: ${key.split('.')[0]}`,
+          `Image uploaded successfully. It will be processed in the background. You can query the image with the ID.`,
         id: key.split('.')[0]
       })
     };
