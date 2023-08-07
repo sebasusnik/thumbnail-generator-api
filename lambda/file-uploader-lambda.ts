@@ -110,7 +110,7 @@ async function processUploadRequest(
     return {
       statusCode: 400,
       body: JSON.stringify({
-        message: "Invalid request body. It should be a multipart form data."
+        message: "Invalid request Content-Type. It should be multipart/form-data."
       })
     };
   }
