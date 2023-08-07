@@ -101,7 +101,7 @@ function createEvents(ID: string, fileUrl: string, metadata: Metadata, thumbnail
   const messageAttribute = {
     callbackUrl: {
       DataType: 'String',
-      StringValue: callbackUrl.slice(0, 5)
+      StringValue: callbackUrl ? callbackUrl.slice(0, 5) : "default_url"
     }
   };
 

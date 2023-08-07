@@ -1,6 +1,6 @@
 # Thumbnail Generator API
 
-This is an API that generates thumbnails of different sizes for any image uploaded to it. It uses AWS CDK v2, AWS Lambda, AWS S3, AWS EventBridge, and AWS DynamoDB to create an event driven serverless architecture.
+This is an API that generates thumbnails of different sizes for any image uploaded to it. It uses AWS CDK v2, AWS Lambda, AWS S3, AWS EventBridge, AWS SNS, and AWS DynamoDB to create an event driven serverless architecture.
 
 The API generates three thumbnails with the following dimensions: 120x120, 160x120, and 400x300 pixels.
 
@@ -50,6 +50,7 @@ npm install
 To deploy the API to your AWS account, run the following commands in the root directory:
 
 ```bash
+cdk bootstrap
 cdk synth
 cdk deploy
 ```
@@ -66,8 +67,8 @@ The output of this command will show you the value of the API key. Copy and save
 
 To use the API, you need to do two steps:
 
-1. Send a POST request to `https://<username>.execute-api.us-east-1.amazonaws.com/prod/upload` with a PNG or JPG file as multipart/form-data, and the API key as a header. You can also include an optional header `X-Callback-URL` with an endpoint to receive the thumbnails as a webhook.
-2. Send a GET request to `https://<username>.execute-api.us-east-1.amazonaws.com/prod/thumbnails?id=<image id>` with the image ID returned by the POST request to receive the thumbnails.
+1. Send a POST request to `https://<api id>.execute-api.<region>.amazonaws.com/prod/upload` with a PNG or JPG file as multipart/form-data, and the API key as a header. You can also include an optional header `X-Callback-URL` with an endpoint to receive the thumbnails as a webhook.
+2. Send a GET request to `https://<api id>.execute-api.<region>.amazonaws.com/prod/thumbnails?id=<image id>` with the image ID returned by the POST request to receive the thumbnails.
 
 ### Example
 
@@ -82,7 +83,7 @@ curl -X POST \
   -H "x-api-key: <your api key>" \
   -H "X-Callback-URL: <your callback url>" \
   -F "file=@<your image file>" \
-  https://<username>.execute-api.us-east-1.amazonaws.com/prod/upload
+  https://<api id>.execute-api.<region>.amazonaws.com/prod/upload
 ```
 
 Expected response:
@@ -100,7 +101,7 @@ Without callback URL:
 curl -X POST \
   -H "x-api-key: <your api key>" \
   -F "file=@<your image file>" \
-  https://<username>.execute-api.us-east-1.amazonaws.com/prod/upload
+  https://<api id>.execute-api.<region>.amazonaws.com/prod/upload
 ```
 
 Expected response:
@@ -117,7 +118,7 @@ Expected response:
 ```bash
 curl -X GET \
   -H "x-api-key: <your api key>" \
-  https://<username>.execute-api.us-east-1.amazonaws.com/prod/thumbnails?id=<image id>
+  https://<api id>.execute-api.<region>.amazonaws.com/prod/thumbnails?id=<image id>
 ```
 
 Expected response:
@@ -184,5 +185,5 @@ The following diagram shows an example of how a client interacts with the API:
 
 ## API Documentation
 
-For more details on the API endpoints, parameters, responses, and errors, you can check out the [Postman collection] that documents the API.
+For more details on the API endpoints, parameters, responses, and errors, you can check out the [[Postman collection](https://documenter.getpostman.com/view/28869574/2s9XxySZZk)] that documents the API.
 

@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from "uuid";
 const eventbridge = new EventBridgeClient({ region: process.env.REGION });
 const s3 = new S3Client({ region: process.env.REGION });
 
+const MULTIPART_FORM_DATA = "multipart/form-data";
 const MB = 1024 * 1024;
 const MAX_FILE_SIZE = 11 * MB;
 
@@ -21,6 +22,20 @@ interface File {
   filename: string;
   contentType: FileType;
   content: Buffer;
+}
+
+function convertHeaders(event: APIGatewayProxyEvent): { [key: string]: string } {
+  const originalHeaders = event.headers;
+  const lowercaseHeaders: { [key: string]: string } = {};
+  for (let key in originalHeaders) {
+    let lowerKey = key.toLowerCase();
+    let value = originalHeaders[key];
+    if (value !== undefined) {
+      // assign the value only if it is not undefined
+      lowercaseHeaders[lowerKey] = value;
+    }
+  }
+  return lowercaseHeaders;
 }
 
 function validateFile(file: File) {
@@ -89,14 +104,17 @@ async function processUploadRequest(
 
   console.log("Input event:", event);
 
-  if (!event.body || !event.headers["content-type"] || !event.headers["content-type"].startsWith("multipart/form-data")) {
+  console.log("Event Body:", event.body)
+  console.log("Content-Type:", event.headers["content-type"])
+
+/*   if (!event.body || !event.headers["content-type"] || !event.headers["content-type"].includes(MULTIPART_FORM_DATA)) {
     return {
       statusCode: 400,
       body: JSON.stringify({
         message: "Invalid request body. It should be a multipart form data."
       })
     };
-  }
+  } */
 
   const formData = parse(event, event.isBase64Encoded);
 
@@ -137,7 +155,9 @@ async function processUploadRequest(
   }
 
   try {
-    const callbackUrl = event.headers["X-Callback-URL".toLowerCase()] || undefined;
+    const lowercaseHeaders = convertHeaders(event);
+
+    const callbackUrl = lowercaseHeaders["x-callback-url"] || undefined;
 
     console.log("Uploading file...");
     const { response, key } = await uploadFile(file);
