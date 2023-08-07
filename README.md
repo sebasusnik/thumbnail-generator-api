@@ -181,9 +181,9 @@ The following diagram illustrates the architecture of the API:
 
 The following diagram shows an example of how a client interacts with the API:
 
-[![Client-API communication](https://imgur.com/zY2RUEQ)](https://excalidraw.com/#json=lddTiuRoFRIBVItpln0ZP,5uYjsyVnkvre_atSy9OilA)
+[![Client-API communication](https://i.imgur.com/zY2RUEQ.png)](https://excalidraw.com/#json=lddTiuRoFRIBVItpln0ZP,5uYjsyVnkvre_atSy9OilA)
 
 ## API Documentation
 
-For more details on the API endpoints, parameters, responses, and errors, you can check out the ![Postman collection](https://documenter.getpostman.com/view/28869574/2s9XxySZZk) that documents the API.
+For more details on the API endpoints, parameters, responses, and errors, you can check out the [Postman collection](https://documenter.getpostman.com/view/28869574/2s9XxySZZk) that documents the API.
 
