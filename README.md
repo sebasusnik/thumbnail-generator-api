@@ -55,10 +55,10 @@ cdk synth
 cdk deploy
 ```
 
-The output of the `cdk deploy` command will show you the API ID and the API endpoint. You will need the API ID to get the API key, which is required to use the API. To get the API key, run the following command with your API ID:
+The output of the `cdk deploy` command will show you the API Key ID and the API endpoint. You will need the API key ID to get the API key, which is required to use the API. To get the API key, run the following command with your API key ID:
 
 ```bash
-aws apigateway get-api-key --api-key <api id output> --include-value
+aws apigateway get-api-key --api-key <api key id output> --include-value
 ```
 
 The output of this command will show you the value of the API key. Copy and save it somewhere secure.
@@ -169,7 +169,7 @@ If you provided a `X-Callback-URL` header in the POST request, you will receive 
 The architecture of the API consists of the following components:
 
 - A REST API gateway that exposes two endpoints: `/upload` and `/thumbnails`.
-- A file-uploader lambda function that handles the POST requests to `/upload`, validates the input, uploads the original image to an S3 bucket, and emits an event to an EventBridge bus with the image metadata and the optional callback URL.
+- A file-uploader lambda function that handles the POST requests to `/upload`, validates the input, uploads the original image to an S3 bucket, and publish an event to an EventBridge bus with the image metadata and the optional callback URL.
 - A thumbnail-generator lambda function that subscribes to the image uploaded events, downloads the original image from the S3 bucket, generates three thumbnails of different sizes, uploads them to the same S3 bucket, and publishes both an EventBridge event and an SNS message with the thumbnail metadata and the optional callback URL.
 - A data storer lambda function that subscribes to the thumbnails generated events from EventBridge, and stores the thumbnail metadata in a DynamoDB table.
 - A get-thumbnails lambda function that handles the GET requests to `/thumbnails?id=<image id>`, queries the DynamoDB table with the image ID as a query parameter, and returns a response with the thumbnails metadata and URLs.
@@ -181,9 +181,9 @@ The following diagram illustrates the architecture of the API:
 
 The following diagram shows an example of how a client interacts with the API:
 
-![Client-API communication]
+[![Client-API communication](https://imgur.com/zY2RUEQ)](https://excalidraw.com/#json=lddTiuRoFRIBVItpln0ZP,5uYjsyVnkvre_atSy9OilA)
 
 ## API Documentation
 
-For more details on the API endpoints, parameters, responses, and errors, you can check out the [Postman collection](https://documenter.getpostman.com/view/28869574/2s9XxySZZk) that documents the API.
+For more details on the API endpoints, parameters, responses, and errors, you can check out the ![Postman collection](https://documenter.getpostman.com/view/28869574/2s9XxySZZk) that documents the API.
 
