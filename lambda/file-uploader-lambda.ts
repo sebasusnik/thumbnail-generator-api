@@ -31,7 +31,6 @@ function convertHeaders(event: APIGatewayProxyEvent): { [key: string]: string } 
     let lowerKey = key.toLowerCase();
     let value = originalHeaders[key];
     if (value !== undefined) {
-      // assign the value only if it is not undefined
       lowercaseHeaders[lowerKey] = value;
     }
   }
@@ -70,8 +69,6 @@ async function uploadFile(file: File): Promise<{ response: PutObjectOutput, key:
     ContentType: file.contentType,
   });
   const response = await s3.send(command);
-  console.log("Upload response:", response);
-  console.log("Upload key:", key);
   return { response, key };
 }
 
@@ -104,17 +101,19 @@ async function processUploadRequest(
 
   console.log("Input event:", event);
 
-  console.log("Event Body:", event.body)
-  console.log("Content-Type:", event.headers["content-type"])
+  const lowercaseHeaders = convertHeaders(event);
 
-/*   if (!event.body || !event.headers["content-type"] || !event.headers["content-type"].includes(MULTIPART_FORM_DATA)) {
+  console.log("Event Body:", event.body)
+  console.log("Content-Type:", lowercaseHeaders["content-type"])
+
+  if (!event.body || !lowercaseHeaders["content-type"] || !lowercaseHeaders["content-type"].includes(MULTIPART_FORM_DATA)) {
     return {
       statusCode: 400,
       body: JSON.stringify({
         message: "Invalid request body. It should be a multipart form data."
       })
     };
-  } */
+  }
 
   const formData = parse(event, event.isBase64Encoded);
 
@@ -155,16 +154,16 @@ async function processUploadRequest(
   }
 
   try {
-    const lowercaseHeaders = convertHeaders(event);
 
     const callbackUrl = lowercaseHeaders["x-callback-url"] || undefined;
 
     console.log("Uploading file...");
     const { response, key } = await uploadFile(file);
+    console.log("Upload response:", response);
+    console.log("Upload key:", key);
 
     console.log("Publishing event...");
     const data = await publishEvent(key, file, callbackUrl);
-
     console.log("Event data:", data);
 
     return {
@@ -183,7 +182,7 @@ async function processUploadRequest(
     console.error("Image upload failed:", error);
     return {
       ...metaData,
-      statusCode: (error as Error).message === "Missing callbackUrl header" ? 400 : 500,
+      statusCode: 500,
       body: JSON.stringify({
         message: `Image upload failed: ${(error as Error).message}`
       })

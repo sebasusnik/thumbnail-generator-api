@@ -185,5 +185,5 @@ The following diagram shows an example of how a client interacts with the API:
 
 ## API Documentation
 
-For more details on the API endpoints, parameters, responses, and errors, you can check out the [[Postman collection](https://documenter.getpostman.com/view/28869574/2s9XxySZZk)] that documents the API.
+For more details on the API endpoints, parameters, responses, and errors, you can check out the [Postman collection](https://documenter.getpostman.com/view/28869574/2s9XxySZZk) that documents the API.
 
