@@ -177,7 +177,7 @@ The architecture of the API consists of the following components:
 
 The following diagram illustrates the architecture of the API:
 
-[![Architecture diagram](https://i.imgur.com/CSwHEN3.png)](https://excalidraw.com/#json=1NZV3FbQcuvGYsgKDwUVM,KQJ4iYMa8CbDkZGQPCj82Q)
+[![Architecture diagram](https://i.imgur.com/PaNSivd.png)](https://excalidraw.com/#json=Fll32M-JDvmgA6wGZruIr,LJIk_ENVIEIvl-ntFO_45A)
 
 The following diagram shows an example of how a client interacts with the API:
 
