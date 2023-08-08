@@ -168,7 +168,7 @@ async function processUploadRequest(
 
     return {
       ...metaData,
-      statusCode: 101,
+      statusCode: 200,
       body: JSON.stringify({
         message: callbackUrl
           ?
