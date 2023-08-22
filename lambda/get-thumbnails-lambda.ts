@@ -10,7 +10,6 @@ interface Item {
   size: string;
   originalUrl: string;
   thumbnailUrl: string;
-  fileSize: number;
   originalFileSize: number;
   type: string;
   callbackUrl: string;
@@ -23,7 +22,6 @@ interface Response {
       width: number;
       height: number;
     };
-    fileSize: number;
     url: string;
   }[];
   metadata: {
@@ -59,7 +57,6 @@ async function queryData(id: string) {
       size: item.size.S,
       originalUrl: item.originalUrl.S,
       thumbnailUrl: item.thumbnailUrl.S,
-      fileSize: Number(item.fileSize.N),
       originalFileSize: Number(item.originalFileSize.N),
       type: item.type.S,
       callbackUrl: item.callbackUrl.S
@@ -76,7 +73,6 @@ async function queryData(id: string) {
           width: Number(item.size.split("x")[0]),
           height: Number(item.size.split("x")[1])
         },
-        fileSize: item.fileSize,
         url: item.thumbnailUrl
       })),
       metadata: {

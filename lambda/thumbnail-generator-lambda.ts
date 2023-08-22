@@ -1,8 +1,11 @@
-import axios from 'axios';
+import * as https from 'https';
 import sharp from 'sharp';
 import { S3, EventBridge, SNS } from 'aws-sdk';
 import { EventBridgeEvent } from 'aws-lambda';
 import { MessageAttributeMap } from 'aws-sdk/clients/sns';
+import { Readable } from 'stream';
+
+type UploadOutput = S3.ManagedUpload.SendData;
 
 type ImageDimensions = {
   width: number;
@@ -20,7 +23,6 @@ type Thumbnail = {
     width: number;
     height: number;
   };
-  fileSize: number
   url: string;
 };
 
@@ -42,52 +44,57 @@ type OutputEventDetail = {
 interface Event extends EventBridgeEvent<string, InputEventDetail> { }
 
 const IMAGE_DIMENSIONS: ImageDimensions[] = JSON.parse(process.env.IMAGE_DIMENSIONS || "");
-
 const BUCKET_NAME = process.env.BUCKET_NAME;
-
 const TOPIC_ARN = process.env.TOPIC_ARN;
 
 const sns = new SNS({ region: process.env.REGION });
 const eventBridge = new EventBridge({ region: process.env.REGION });
 
-async function getImageBuffer(fileUrl: string): Promise<Buffer> {
-  const response = await axios.get(fileUrl, { responseType: 'arraybuffer' });
-  const imageBuffer = Buffer.from(response.data, 'binary');
-  console.log(`Image buffer size: ${imageBuffer.length} bytes`);
-  return imageBuffer;
+async function getImageStream(fileUrl: string): Promise<Readable> {
+  return new Promise((resolve, reject) => {
+    https.get(fileUrl, (res) => { // send a GET request to the image URL
+      if (res.statusCode !== 200) { // check if the response is OK
+        reject(new Error(`Request failed with status code ${res.statusCode}`));
+      } else {
+        resolve(res); // resolve with the response stream
+      }
+    }).on('error', (err) => { // handle errors
+      reject(err);
+    });
+  });
 }
 
-async function resizeImageBuffer(imageBuffer: Buffer, width: number, height: number): Promise<Buffer> {
-  const resizedBuffer = await sharp(imageBuffer)
-    .resize(width, height)
-    .toBuffer();
-  console.log(`Resized buffer size: ${resizedBuffer.length} bytes`);
-  return resizedBuffer;
-}
-
-async function uploadResizedBuffer(resizedBuffer: Buffer, metadata: Metadata, width: number, height: number): Promise<string> {
+async function resizeImageStream(imageStream: Readable, metadata: Metadata, width: number, height: number): Promise<UploadOutput> {
   if (!BUCKET_NAME) throw new Error('BUCKET_NAME environment variable is not defined');
-
   const newFileName = `${metadata.filename}-${width}x${height}.${metadata.type.split('/')[1]}`;
-
   console.log(`New file name for size: ${newFileName}`);
-
   console.log("Uploading file...");
-
   const s3 = new S3();
-  const putObjectOutput: S3.PutObjectOutput = await s3.putObject({
+  const uploadParams = {
     Bucket: BUCKET_NAME,
     Key: newFileName,
-    Body: resizedBuffer,
     ContentType: metadata.type,
-  }).promise();
-
-  console.log(`Uploaded resized buffer for size to bucket ${BUCKET_NAME}`);
-
-  return `https://s3.amazonaws.com/${BUCKET_NAME}/${newFileName}`;
+    Body: imageStream.pipe(sharp().resize(width, height)) // pipe the image stream to sharp and resize it
+  };
+  const uploadOutput = await s3.upload(uploadParams).promise(); // upload the resized stream to S3
+  console.log(`Uploaded resized stream for size to bucket ${BUCKET_NAME}`);
+  return uploadOutput; // return the uploaded file URL
 }
 
-function createEvents(ID: string, fileUrl: string, metadata: Metadata, thumbnails: Thumbnail[], callbackUrl: string): { messageAttribute: MessageAttributeMap, message: string; eventDetail: OutputEventDetail } {
+async function generateThumbnails(fileUrl: string, metadata: Metadata): Promise<Thumbnail[]> {
+  const thumbnails = [];
+  for (const { width, height } of IMAGE_DIMENSIONS) {
+    const imageStream = await getImageStream(fileUrl); // get the image stream from the URL
+    const uploadOutput = await resizeImageStream(imageStream, metadata, width, height); // resize and upload the image stream
+    thumbnails.push({
+      size: { width, height },
+      url: uploadOutput.Location
+    });
+  }
+  return thumbnails;
+}
+
+function createEvents(ID: string, fileUrl: string, metadata: Metadata, thumbnails: Thumbnail[], callbackUrl: string): { message: string; eventDetail: OutputEventDetail } {
   const eventDetail: OutputEventDetail = {
     ID,
     originalImageUrl: fileUrl,
@@ -98,22 +105,14 @@ function createEvents(ID: string, fileUrl: string, metadata: Metadata, thumbnail
 
   console.log(`Event detail for thumbnailsGenerated: ${JSON.stringify(eventDetail)}`);
 
-  const messageAttribute = {
-    callbackUrl: {
-      DataType: 'String',
-      StringValue: callbackUrl ? callbackUrl.slice(0, 5) : "default_url"
-    }
-  };
-
   const message = JSON.stringify(eventDetail);
 
   console.log(`SNS Message for Webhook Sender: ${message}`);
 
-  return { messageAttribute, message, eventDetail };
+  return { message, eventDetail };
 }
 
-
-const publishSNSMessage = async ( messageAttribute: MessageAttributeMap, message: string ) => {
+const publishSNSMessage = async ( message: string, messageAttribute?: MessageAttributeMap  ) => {
 
   console.log("Sending SNS Message...", {messageAttribute, message})
   const messageResponse = sns.publish({
@@ -140,40 +139,20 @@ async function publishEvent(eventDetail: OutputEventDetail): Promise<EventBridge
   return putEventsResponse;
 }
 
-async function generateThumbnails(fileUrl: string, metadata: Metadata): Promise<Thumbnail[]> {
-
-  const imageBuffer = await getImageBuffer(fileUrl);
-
-  const thumbnails = [];
-
-  for (const { width, height } of IMAGE_DIMENSIONS) {
-
-    const resizedBuffer = await resizeImageBuffer(imageBuffer, width, height);
-
-    const url = await uploadResizedBuffer(resizedBuffer, metadata, width, height);
-
-    thumbnails.push({
-      size: { width, height },
-      fileSize: resizedBuffer.byteLength,
-      url
-    });
-
-  }
-
-  return thumbnails;
-}
-
 export async function handler(event: Event): Promise<{ statusCode: number; body: string }> {
   try {
     const { ID, fileUrl, metadata, callbackUrl } = event.detail;
 
     const thumbnails = await generateThumbnails(fileUrl, metadata);
 
-    const { messageAttribute, message, eventDetail } = createEvents(ID, fileUrl, metadata, thumbnails, callbackUrl);
+    const { message, eventDetail } = createEvents(ID, fileUrl, metadata, thumbnails, callbackUrl);
 
-    const messageResponse = await publishSNSMessage( messageAttribute, message );
+    const urlRegex = /^https?:\/\/[^\s]+$/; // a regular expression to match a valid URL
 
-    console.log("SNS Message response", messageResponse)
+    if (urlRegex.test(callbackUrl)) {
+      const messageResponse = await publishSNSMessage( message );
+      console.log("SNS Message response", messageResponse)
+    }
 
     await publishEvent(eventDetail);
 

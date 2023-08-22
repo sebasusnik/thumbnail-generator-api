@@ -26,12 +26,6 @@ export class WebhookSender extends Construct {
       memorySize: 256,
     });
 
-    props.topic.addSubscription(new subscriptions.LambdaSubscription(webhookSender, {
-      filterPolicy: {
-        "callbackUrl": sns.SubscriptionFilter.stringFilter({
-          allowlist: ["https", "http"]
-        })
-      }
-    }));
+    props.topic.addSubscription(new subscriptions.LambdaSubscription(webhookSender));
   }
 }

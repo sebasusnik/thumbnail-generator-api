@@ -65,7 +65,7 @@ export class ThumbnailGenerator extends Construct {
       },
       bundling: {
         forceDockerBundling: true,
-        nodeModules: ['sharp', 'axios'],
+        nodeModules: ['sharp'],
         minify: true,
         target: 'node18',
       },

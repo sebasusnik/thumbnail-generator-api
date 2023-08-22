@@ -14,7 +14,6 @@ interface Event {
       width: number;
       height: number;
     };
-    fileSize: number;
     url: string;
   }[];
   metadata: {
@@ -29,7 +28,6 @@ interface Item {
   size: string;
   originalUrl: string;
   thumbnailUrl: string;
-  fileSize: number;
   originalFileSize: number;
   type: string;
   callbackUrl: string;
@@ -50,7 +48,6 @@ async function storeData(data: Event) {
     return {
       id,
       size,
-      fileSize: thumbnail.fileSize,
       originalUrl: originalImageUrl,
       thumbnailUrl: thumbnail.url,
       originalFileSize: metadata.fileSize,
@@ -67,7 +64,6 @@ async function storeData(data: Event) {
       Item: {
         id: { S: item.id },
         size: { S: item.size },
-        fileSize: { N: item.fileSize.toString() },
         originalUrl: { S: item.originalUrl },
         thumbnailUrl: { S: item.thumbnailUrl },
         originalFileSize: { N: item.originalFileSize.toString() },
